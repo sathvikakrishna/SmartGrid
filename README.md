@@ -1,6 +1,6 @@
 # Smart Energy Microgrid and Demand Forecasting Engine
 
-HackSphere 3.0 submission by **<Team B99(Sathwika, Vigneshwar Reddy)>**.
+HackSphere 3.0 submission by **Team B99(Sathwika, Vigneshwar Reddy)**.
 
 
 - **Live app:** <https://microgrid-50047222646.development.catalystappsail.in/>
