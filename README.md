@@ -6,7 +6,7 @@ HackSphere 3.0 submission by **<TEAM NAME>**.
 - **Model:** Zoho Catalyst QuickML (XGBoost regression), published as a REST endpoint
 - **Hosting:** Zoho Catalyst AppSail (Python 3.13, Flask)
 
-The app forecasts hourly energy demand (kW) for a 24-hour window, then turns each forecast hour into a power dispatch signal: **Main Grid Mode** or **Renewable Storage Mode**, plus a **Critical Overload Alert**. A dashboard shows the load curve, hourly grid states, a simulated battery state of charge, alerts and a system log.
+The app forecasts hourly energy demand (kW) for a 24-hour window, then turns each forecast hour into a power dispatch signal: **Main Grid Mode** or **Renewable Storage Mode**, plus a **Critical Overload Alert**. The dashboard shows the load curve, a selectable 24-hour dispatch timeline, simulated battery charge in percent and kWh, actionable overload details, filterable/sortable hourly signals, and a system log. CSV selection and forecast progress are shown in the dashboard controls; without an upload, the bundled sample data is used.
 
 ## Architecture
 
