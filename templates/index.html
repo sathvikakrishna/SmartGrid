@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Microgrid Dispatch</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f3f6fb;--card:#fff;--ink:#16213a;--mute:#66728d;--line:#e2e8f3;--blue:#2563eb;--green:#16a34a;--red:#dc2626;--amber:#d97706}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#0f1b3d;color:#fff;padding:16px 24px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:20px}header small{color:#aab6d6;display:block;font-weight:400;font-size:12px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px}
+.controls input[type=number]{width:70px}
+.controls input,.controls button{padding:7px 10px;border-radius:8px;border:1px solid #3b4a75;background:#17264f;color:#fff;font-size:13px}
+.controls button{background:var(--blue);border-color:var(--blue);cursor:pointer;font-weight:600}
+.controls button:disabled{opacity:.6;cursor:wait}
+main{max-width:1180px;margin:0 auto;padding:18px 16px 40px;display:grid;gap:16px}
+.banner{padding:12px 16px;border-radius:10px;font-weight:600;font-size:14px}
+.banner.ok{background:#e8f6ee;color:#14532d}.banner.crit{background:#fde8e8;color:#991b1b;border:1px solid #f5b5b5}
+.banner.err{background:#fff4e0;color:#92400e}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h2{margin:0 0 10px;font-size:14px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.top{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.badge{display:inline-block;padding:8px 16px;border-radius:999px;font-weight:700;font-size:16px;color:#fff}
+.badge.grid{background:var(--blue)}.badge.store{background:var(--green)}
+.big{font-size:30px;font-weight:700;margin:10px 0 2px}.sub{color:var(--mute);font-size:13px}
+.bar{height:16px;background:#e6ebf5;border-radius:8px;overflow:hidden;margin:10px 0 4px}
+.bar>div{height:100%;background:var(--green);transition:width .3s}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.kpi b{display:block;font-size:20px}.kpi span{color:var(--mute);font-size:12px}
+.chartbox{height:290px;position:relative}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(38px,1fr));gap:4px}
+.blk{border-radius:6px;padding:6px 0;text-align:center;font-size:11px;color:#fff;cursor:pointer;border:2px solid transparent;position:relative}
+.blk.grid{background:var(--blue)}.blk.store{background:var(--green)}
+.blk.sel{border-color:#0f1b3d}.blk .ov{position:absolute;top:-6px;right:-4px;background:var(--red);border-radius:50%;width:14px;height:14px;font-size:10px;line-height:14px}
+.legend{font-size:12px;color:var(--mute);margin-top:8px}
+.two{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.scroll{max-height:340px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:#f7f9fd;color:var(--mute);font-weight:600}
+tr.ov td{background:#fff1f1}
+.log{font:12.5px/1.6 ui-monospace,Consolas,monospace}.log div{border-bottom:1px dashed var(--line);padding:2px 0}
+.log .c{color:var(--red);font-weight:700}.log .s{color:var(--green)}.log .g{color:var(--blue)}.log .w{color:var(--amber)}
+footer{color:var(--mute);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Smart Microgrid Dispatch <small>24-hour demand forecast (QuickML) and grid switching</small></h1>
+  <div class="controls">
+    <label>CSV <input type="file" id="file" accept=".csv"></label>
+    <label>Battery start % <input type="number" id="soc" value="90" min="0" max="100"></label>
+    <button id="run">Run forecast</button>
+  </div>
+</header>
+<main>
+  <div id="banner"></div>
+  <div class="top">
+    <div class="card"><h2>Grid state</h2><div id="badge"></div><div class="big" id="dem">-</div><div class="sub" id="why"></div></div>
+    <div class="card"><h2>Battery state of charge</h2><div class="big" id="socv">-</div><div class="bar"><div id="socbar" style="width:0"></div></div><div class="sub" id="batt"></div></div>
+    <div class="card"><h2>Summary</h2><div class="kpis" id="kpis"></div></div>
+  </div>
+  <div class="card"><h2>Predicted load curve (kW)</h2><div class="chartbox"><canvas id="load"></canvas></div></div>
+  <div class="card"><h2>Hourly dispatch signal (click an hour)</h2><div class="strip" id="strip"></div>
+    <div class="legend"><span style="color:var(--blue)">&#9632;</span> Main Grid &nbsp; <span style="color:var(--green)">&#9632;</span> Renewable Storage &nbsp; <span style="color:var(--red)">&#9679;</span> Critical overload</div></div>
+  <div class="card"><h2>Battery state of charge (%)</h2><div class="chartbox" style="height:220px"><canvas id="socc"></canvas></div></div>
+  <div class="two">
+    <div class="card"><h2>Hourly signals</h2><div class="scroll"><table><thead><tr><th>Time</th><th>Demand kW</th><th>Mode</th><th>Alert</th><th>SoC %</th></tr></thead><tbody id="tb"></tbody></table></div></div>
+    <div class="card"><h2>System log</h2><div class="scroll log" id="log"></div></div>
+  </div>
+  <footer id="foot"></footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let DATA = null, SEL = 0, loadChart = null, socChart = null;
+
+async function run() {
+  const fd = new FormData(), f = $('file').files[0];
+  if (f) fd.append('file', f);
+  fd.append('initial_soc', $('soc').value || 90);
+  $('run').disabled = true; $('run').textContent = 'Forecasting...';
+  try {
+    const r = await fetch('/api/forecast', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    DATA = j; SEL = 0; render();
+  } catch (e) {
+    $('banner').className = 'banner err'; $('banner').textContent = e.message;
+  } finally {
+    $('run').disabled = false; $('run').textContent = 'Run forecast';
+  }
+}
+
+function render() {
+  const rows = DATA.rows, k = DATA.kpis;
+  const ov = rows.filter(r => r.overload);
+  const b = $('banner');
+  if (ov.length) { b.className = 'banner crit'; b.textContent = 'CRITICAL OVERLOAD ALERT: ' + ov.length + ' hour(s) at or above 200 kW - ' + ov.map(r => r.hh + ' (' + r.demand_kw + ' kW)').join(', '); }
+  else { b.className = 'banner ok'; b.textContent = 'No overload expected in this window. Peak ' + k.peak_kw + ' kW at ' + k.peak_time + '.'; }
+
+  $('kpis').innerHTML = [[k.peak_kw + ' kW', 'Peak demand (' + k.peak_time + ')'], [k.avg_kw + ' kW', 'Average demand'],
+    [k.storage_hours + ' h', 'On battery'], [k.overload_hours + ' h', 'Overload hours'], [k.min_soc_pct + '%', 'Lowest charge']]
+    .map(x => '<div class="kpi"><b>' + x[0] + '</b><span>' + x[1] + '</span></div>').join('');
+
+  $('strip').innerHTML = rows.map((r, i) => '<div class="blk ' + (r.storage ? 'store' : 'grid') + '" data-i="' + i + '" title="' + r.hh + ' - ' + r.mode + ' - ' + r.demand_kw + ' kW">' + r.hh.slice(0, 2) + (r.overload ? '<span class="ov">!</span>' : '') + '</div>').join('');
+  document.querySelectorAll('.blk').forEach(el => el.onclick = () => { SEL = +el.dataset.i; select(); });
+
+  $('tb').innerHTML = rows.map(r => '<tr class="' + (r.overload ? 'ov' : '') + '"><td>' + r.hh + '</td><td>' + r.demand_kw + '</td><td>' + r.mode + '</td><td>' + (r.overload ? 'CRITICAL' : '-') + '</td><td>' + r.soc_pct + '</td></tr>').join('');
+
+  const L = [];
+  L.push(['g', 'Forecast ready: ' + rows.length + ' hours from ' + rows[0].ts + '.']);
+  DATA.notes.forEach(n => L.push(['w', n]));
+  let prev = null;
+  rows.forEach(r => {
+    if (r.mode !== prev) L.push([r.storage ? 's' : 'g', r.hh + '  SWITCH -> ' + r.mode + ' (' + r.reason + ')']);
+    prev = r.mode;
+    if (r.overload) L.push(['c', r.hh + '  CRITICAL OVERLOAD: ' + r.demand_kw + ' kW']);
+    if (r.battery_low) L.push(['w', r.hh + '  Battery at minimum charge, cannot cover the full load']);
+  });
+  $('log').innerHTML = L.map(x => '<div class="' + x[0] + '">' + x[1] + '</div>').join('');
+
+  const c = DATA.config;
+  $('foot').textContent = 'Battery model (simulated assumptions): ' + c.capacity_kwh + ' kWh, max discharge ' + c.max_discharge_kw + ' kW, recharge ' + c.charge_kw + ' kW in Main Grid mode, floor ' + c.soc_floor_pct + '%. Rules: Storage if demand > 160 kW or hour 18-22; overload alert at 200 kW or more.';
+  charts(); select();
+}
+
+function select() {
+  const r = DATA.rows[SEL];
+  $('badge').innerHTML = '<span class="badge ' + (r.storage ? 'store' : 'grid') + '">' + r.mode + '</span>';
+  $('dem').textContent = r.demand_kw + ' kW at ' + r.hh;
+  $('why').textContent = r.reason + (r.overload ? ' | CRITICAL OVERLOAD' : '');
+  $('socv').textContent = r.soc_pct + '%';
+  $('socbar').style.width = r.soc_pct + '%';
+  $('socbar').style.background = r.soc_pct < 25 ? 'var(--red)' : 'var(--green)';
+  $('batt').textContent = r.battery_kw > 0 ? 'Discharging ' + r.battery_kw + ' kW' : 'Charging ' + (-r.battery_kw) + ' kW';
+  document.querySelectorAll('.blk').forEach((el, i) => el.classList.toggle('sel', i === SEL));
+}
+
+function charts() {
+  const rows = DATA.rows, L = rows.map(r => r.hh);
+  if (loadChart) loadChart.destroy(); if (socChart) socChart.destroy();
+  loadChart = new Chart($('load'), { type: 'line', data: { labels: L, datasets: [
+    { label: 'Predicted demand (kW)', data: rows.map(r => r.demand_kw), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', fill: true, tension: .3,
+      pointBackgroundColor: rows.map(r => r.overload ? '#dc2626' : '#2563eb'), pointRadius: rows.map(r => r.overload ? 6 : 3) },
+    { label: '160 kW storage threshold', data: L.map(() => 160), borderColor: '#16a34a', borderDash: [6, 4], pointRadius: 0 },
+    { label: '200 kW overload', data: L.map(() => 200), borderColor: '#dc2626', borderDash: [6, 4], pointRadius: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { title: { display: true, text: 'kW' } } }, plugins: { legend: { position: 'bottom' } } } });
+  socChart = new Chart($('socc'), { type: 'line', data: { labels: L, datasets: [
+    { label: 'Battery charge (%)', data: rows.map(r => r.soc_pct), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.12)', fill: true, tension: .25 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } }, plugins: { legend: { display: false } } } });
+}
+
+$('run').onclick = run;
+run();
+</script>
+</body>
+</html>

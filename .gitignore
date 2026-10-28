@@ -1,0 +1,18 @@
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+runtime.env
+refresh_token.txt
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Exclude requested file
+predict_starter.py
+
+# Virtual environments
+venv/
+.venv/
