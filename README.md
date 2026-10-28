@@ -1,0 +1,2 @@
+# SmartGrid
+Hacksphere hackathon - SmartGrid
