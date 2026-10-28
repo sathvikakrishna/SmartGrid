@@ -2,7 +2,7 @@
 
 HackSphere 3.0 submission by **<TEAM NAME>**.
 
-- **Live app:** <LIVE_APP_URL>
+- **Live app:** <https://microgrid-50047222646.development.catalystappsail.in/>
 - **Model:** Zoho Catalyst QuickML (XGBoost regression), published as a REST endpoint
 - **Hosting:** Zoho Catalyst AppSail (Python 3.13, Flask)
 
